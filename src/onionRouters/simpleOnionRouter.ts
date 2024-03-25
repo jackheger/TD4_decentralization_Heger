@@ -1,45 +1,55 @@
 import bodyParser from "body-parser";
 import express from "express";
-import { BASE_ONION_ROUTER_PORT } from "../config";
+import {BASE_ONION_ROUTER_PORT, REGISTRY_PORT} from "../config";
+import {exportPrvKey, exportPubKey, generateRsaKeyPair, importPrvKey, rsaDecrypt, symDecrypt} from "../crypto";
 
 export async function simpleOnionRouter(nodeId: number) {
   const onionRouter = express();
+
+  const rsaPair = await generateRsaKeyPair();
+  const publicKey = await exportPubKey(rsaPair.publicKey);
+  const privateKey = await exportPrvKey(rsaPair.privateKey);
+
   onionRouter.use(express.json());
   onionRouter.use(bodyParser.json());
 
-  // Status route to indicate the server is live
+  let lastReceivedEncryptedMessage: string | any = null
+  let getLastReceivedDecryptedMessage: string | any = null
+  let getLastMessageDestination: string | any = null
+
+  // Implement the status route
   onionRouter.get("/status", (req, res) => {
-    res.send('live');
+    res.status(200).send("live");
   });
 
-  // GET route for last received encrypted message
-  // This should return { result: null } before any message is received
-  onionRouter.get("/getLastReceivedEncryptedMessage", (req, res) => {
-    // Implement logic to retrieve the last received encrypted message
-    // Placeholder response
-    res.json({ result: null });
+  onionRouter.get("/getLastReceivedEncryptedMessage", function(req,res){
+    res.json({result:lastReceivedEncryptedMessage})
+  })
+
+  onionRouter.get("/getLastReceivedDecryptedMessage", function(req,res){
+    res.json({result:getLastReceivedDecryptedMessage})
+  })
+
+  onionRouter.get("/getLastMessageDestination", function(req,res){
+    res.json({result:getLastMessageDestination})
+  })
+
+  onionRouter.get("/getPrivateKey", function(req, res) {
+    res.json({ result: privateKey });
   });
 
-  // GET route for last received decrypted message
-  // This should return { result: null } before any message is received
-  onionRouter.get("/getLastReceivedDecryptedMessage", (req, res) => {
-    // Implement logic to retrieve the last received decrypted message
-    // Placeholder response
-    res.json({ result: null });
+  // registering the router to the registry
+  await fetch(`http://localhost:${REGISTRY_PORT}/registerNode`, {
+    method: "POST",
+    body: JSON.stringify({ nodeId: nodeId, pubKey: publicKey, prvKey: privateKey }),
+    headers: { "Content-Type": "application/json" },
   });
 
-  // GET route for last message destination
-  // This should return { result: null } before any message is received
-  onionRouter.get("/getLastMessageDestination", (req, res) => {
-    // Implement logic to retrieve the last message destination
-    // Placeholder response
-    res.json({ result: null });
+  return onionRouter.listen(BASE_ONION_ROUTER_PORT + nodeId, async() => {
+    console.log(
+        `Onion router ${nodeId} is listening on port ${
+            BASE_ONION_ROUTER_PORT + nodeId
+        }`
+    );
   });
-
-  // Starting the server on the assigned port
-  const server = onionRouter.listen(BASE_ONION_ROUTER_PORT + nodeId, () => {
-    console.log(`Onion router ${nodeId} is listening on port ${BASE_ONION_ROUTER_PORT + nodeId}`);
-  });
-
-  return server;
 }

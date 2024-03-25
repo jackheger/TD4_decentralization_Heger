@@ -1,56 +1,56 @@
-import bodyParser from "body-parser";
 import express, { Request, Response } from "express";
 import { REGISTRY_PORT } from "../config";
 
-export type Node = {
-  nodeId: number;
-  pubKey: string;
-};
+export type Node = { nodeId: number; pubKey: string; privateKey: string };
 
 export type RegisterNodeBody = {
   nodeId: number;
   pubKey: string;
+  privateKey: string;
 };
 
 export type GetNodeRegistryBody = {
   nodes: Node[];
 };
 
-// This would be your in-memory storage of registered nodes, to be replaced or expanded
-// according to your storage and retrieval logic
-const nodeRegistry: Node[] = [];
-
 export async function launchRegistry() {
   const _registry = express();
   _registry.use(express.json());
-  _registry.use(bodyParser.json());
 
-  // Status route to indicate the registry is live
-  _registry.get("/status", (req, res) => {
-    res.send('live');
+  const nodes: Node[] = [];
+
+  // Implement the status route
+  _registry.get("/status", (req: Request, res: Response) => {
+    res.send("live");
   });
 
-  // Route to return all registered nodes
-  _registry.get("/nodes", (req, res) => {
-    // Logic to return all nodes could be more complex in a real application
-    res.json({ nodes: nodeRegistry });
-  });
-
-  // Route to return a single node's public key by nodeId
-  _registry.get("/node/:nodeId", (req, res) => {
-    const nodeId = parseInt(req.params.nodeId, 10);
-    const node = nodeRegistry.find(n => n.nodeId === nodeId);
-    if (node) {
-      res.json(node);
-    } else {
-      res.status(404).send('Node not found');
+  _registry.post("/registerNode", (req, res) => {
+    try {
+      // @ts-ignore
+      const newNode: Node = req.body;
+      nodes.push(newNode);
+      res.sendStatus(201);
+    } catch (e) {
+      res.sendStatus(500);
     }
   });
 
-  // Start listening for requests on the designated port
-  const server = _registry.listen(REGISTRY_PORT, () => {
-    console.log(`Registry is listening on port ${REGISTRY_PORT}`);
+  _registry.get("/getPrivateKey", (req, res) => {
+    const id = req.query.id;
+    // @ts-ignore
+    const node = nodes.find((node) => node.nodeId === id);
+    if (node) {
+      res.send({result: node.privateKey});
+    } else {
+      res.sendStatus(404);
+    }
   });
 
-  return server;
+  _registry.get("/getNodeRegistry", (req, res) => {
+    res.json({nodes});
+  });
+
+  return _registry.listen(REGISTRY_PORT, () => {
+    console.log(`registry is listening on port ${REGISTRY_PORT}`);
+  });
 }
